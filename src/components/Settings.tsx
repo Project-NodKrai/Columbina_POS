@@ -141,10 +141,25 @@ export function Settings() {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">서브도메인 (변경 불가)</label>
-              <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 font-mono text-sm">
-                {store?.subdomain}.pos.n-e.kr
+              <label className="block text-sm font-bold text-slate-700 mb-2">매장 주소 (서브도메인)</label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 font-mono text-sm overflow-hidden truncate">
+                  {store?.subdomain}.pos.n-e.kr
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`https://${store?.subdomain}.pos.n-e.kr`);
+                    alert('주소가 복사되었습니다.');
+                  }}
+                  className="p-2.5 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                >
+                  복사
+                </button>
               </div>
+              <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                * 실제 도메인 연결(DNS 설정)이 완료되어야 접속이 가능합니다.
+              </p>
             </div>
           </div>
         </div>

@@ -30,6 +30,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(firebaseUser);
       setIsAuthReady(true);
       
+      // Check for subdomain in URL
+      const hostname = window.location.hostname;
+      const urlSubdomain = hostname.endsWith('.pos.n-e.kr') ? hostname.split('.')[0] : null;
+
       if (firebaseUser) {
         // Try to find the store owned by this user
         const storesRef = collection(db, 'stores');
@@ -45,6 +49,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         });
 
+        return () => unsubscribeStore();
+      } else if (urlSubdomain) {
+        // If not logged in but on a subdomain, try to load that store for Kiosk mode
+        const storesRef = collection(db, 'stores');
+        const q = query(storesRef, where('subdomain', '==', urlSubdomain));
+        
+        const unsubscribeStore = onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) {
+            const storeDoc = snapshot.docs[0];
+            setStore({ id: storeDoc.id, ...storeDoc.data() } as Store);
+          }
+          setLoading(false);
+        });
         return () => unsubscribeStore();
       } else {
         setStore(null);
