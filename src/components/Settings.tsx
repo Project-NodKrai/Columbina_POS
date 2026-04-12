@@ -228,7 +228,7 @@ export function Settings() {
                     />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-400">카카오페이/토스페이의 나만의 QR 링크를 입력하세요.</p>
+                <p className="mt-2 text-xs text-slate-400">카카오페이 또는 토스페이의 송금 QR 코드 이미지 주소를 입력해주세요.</p>
               </div>
             </div>
           </div>

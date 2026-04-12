@@ -21,6 +21,7 @@ export function POSSeller() {
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [receivedAmount, setReceivedAmount] = useState<string>('');
+  const [isDirectCheckout, setIsDirectCheckout] = useState(false);
 
   useEffect(() => {
     if (!store) return;
@@ -76,6 +77,19 @@ export function POSSeller() {
   const handleCheckout = async (method: 'cash' | 'card' | 'transfer') => {
     if (!store || cart.length === 0 || isProcessing) return;
     
+    if (method === 'cash') {
+      setSelectedSale({
+        id: 'DIRECT',
+        items: cart,
+        totalAmount: total,
+        paymentMethod: 'cash'
+      });
+      setIsDirectCheckout(true);
+      setReceivedAmount('');
+      setIsCalculatorOpen(true);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       // 1. Record Sale
@@ -115,26 +129,48 @@ export function POSSeller() {
 
     setIsProcessing(true);
     try {
-      // 1. Update Sale Status
-      await updateDoc(doc(db, `stores/${store.id}/sales`, selectedSale.id), {
-        status: 'completed',
-        receivedAmount: selectedSale.paymentMethod === 'cash' ? received : selectedSale.totalAmount,
-        changeAmount: selectedSale.paymentMethod === 'cash' ? (received - selectedSale.totalAmount) : 0,
-        completedAt: serverTimestamp()
-      });
-
-      // 2. Update Inventory
-      for (const item of selectedSale.items) {
-        await updateDoc(doc(db, `stores/${store.id}/products`, item.id), {
-          stock: increment(-item.quantity)
+      if (isDirectCheckout) {
+        // Direct POS Checkout
+        await addDoc(collection(db, `stores/${store.id}/sales`), {
+          storeId: store.id,
+          items: cart.map(item => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+          totalAmount: total,
+          paymentMethod: 'cash',
+          status: 'completed',
+          receivedAmount: received,
+          changeAmount: received - total,
+          timestamp: serverTimestamp(),
+          type: 'seller'
         });
+
+        for (const item of cart) {
+          await updateDoc(doc(db, `stores/${store.id}/products`, item.id), {
+            stock: increment(-item.quantity)
+          });
+        }
+        setCart([]);
+        setIsDirectCheckout(false);
+      } else {
+        // Pending Kiosk Sale
+        await updateDoc(doc(db, `stores/${store.id}/sales`, selectedSale.id), {
+          status: 'completed',
+          receivedAmount: selectedSale.paymentMethod === 'cash' ? received : selectedSale.totalAmount,
+          changeAmount: selectedSale.paymentMethod === 'cash' ? (received - selectedSale.totalAmount) : 0,
+          completedAt: serverTimestamp()
+        });
+
+        for (const item of selectedSale.items) {
+          await updateDoc(doc(db, `stores/${store.id}/products`, item.id), {
+            stock: increment(-item.quantity)
+          });
+        }
       }
 
       setIsCalculatorOpen(false);
       setSelectedSale(null);
       setReceivedAmount('');
     } catch (error) {
-      console.error('Complete pending failed', error);
+      console.error('Complete checkout failed', error);
     } finally {
       setIsProcessing(false);
     }
@@ -163,6 +199,7 @@ export function POSSeller() {
   const openCalculator = (sale: any) => {
     setSelectedSale(sale);
     setReceivedAmount('');
+    setIsDirectCheckout(false);
     setIsCalculatorOpen(true);
   };
 
@@ -396,8 +433,12 @@ export function POSSeller() {
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">결제 승인 및 거스름돈</h2>
-                <p className="text-slate-500">주문 번호: #{selectedSale.id.slice(-4).toUpperCase()}</p>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  {isDirectCheckout ? '현금 결제 거스름돈' : '결제 승인 및 거스름돈'}
+                </h2>
+                <p className="text-slate-500">
+                  {isDirectCheckout ? '직접 판매 주문' : `주문 번호: #${selectedSale.id.slice(-4).toUpperCase()}`}
+                </p>
               </div>
               <button onClick={() => setIsCalculatorOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-6 h-6 text-slate-400" />
@@ -470,10 +511,17 @@ export function POSSeller() {
 
               <div className="pt-4 flex gap-3">
                 <button 
-                  onClick={() => handleRejectPending(selectedSale.id)}
+                  onClick={() => {
+                    if (isDirectCheckout) {
+                      setIsCalculatorOpen(false);
+                      setSelectedSale(null);
+                    } else {
+                      handleRejectPending(selectedSale.id);
+                    }
+                  }}
                   className="flex-1 px-6 py-5 bg-slate-100 text-slate-500 rounded-2xl font-bold text-lg hover:bg-red-50 hover:text-red-600 transition-all"
                 >
-                  주문 거절
+                  {isDirectCheckout ? '취소' : '주문 거절'}
                 </button>
                 <button 
                   disabled={isProcessing || (selectedSale.paymentMethod === 'cash' && Number(receivedAmount) < selectedSale.totalAmount)}
@@ -481,7 +529,7 @@ export function POSSeller() {
                   className="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-bold text-xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-3"
                 >
                   {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
-                  {selectedSale.paymentMethod === 'cash' ? '결제 승인 및 완료' : '입금 확인 및 승인'}
+                  {selectedSale.paymentMethod === 'cash' ? '결제 완료' : '입금 확인 및 승인'}
                 </button>
               </div>
             </div>
