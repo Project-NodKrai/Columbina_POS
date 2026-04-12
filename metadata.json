@@ -1,0 +1,5 @@
+{
+  "name": "NodKrai POS",
+  "description": "A modern, web-based POS system with real-time inventory management, dual-mode checkout (Seller/Kiosk), and Excel reporting.",
+  "requestFramePermissions": []
+}

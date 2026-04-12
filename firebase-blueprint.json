@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "Store": {
+      "title": "Store",
+      "description": "Represents a user's store/business.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "UID of the store owner" },
+        "name": { "type": "string", "description": "Name of the store" },
+        "subdomain": { "type": "string", "description": "Custom subdomain (e.g., storename.pos.n-e.kr)" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "allowCash": { "type": "boolean" },
+        "hideOutOfStock": { "type": "boolean" },
+        "lowStockThreshold": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "subdomain"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "An item for sale in the store.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "cost": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["storeId", "name", "price", "stock"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "A transaction record.",
+      "type": "object",
+      "properties": {
+        "storeId": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "changeAmount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "card", "transfer"] },
+        "status": { "type": "string", "enum": ["pending", "completed", "cancelled"] },
+        "type": { "type": "string", "enum": ["kiosk", "seller"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storeId", "items", "totalAmount", "paymentMethod", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/stores/{storeId}": {
+      "schema": "Store",
+      "description": "Store configuration and metadata."
+    },
+    "/stores/{storeId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Inventory items for a specific store."
+    },
+    "/stores/{storeId}/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Categories for a specific store."
+    },
+    "/stores/{storeId}/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Sales records for a specific store."
+    }
+  }
+}
