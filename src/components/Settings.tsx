@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { doc, updateDoc, collection, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Store, CreditCard, Shield, Database, Save, AlertTriangle, Download, Trash2, QrCode, Banknote, Eye, EyeOff } from 'lucide-react';
+import { Store, CreditCard, Shield, Database, Save, AlertTriangle, Download, Trash2, QrCode, Banknote, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 
 export function Settings() {
   const { store, user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
   
@@ -29,7 +30,8 @@ export function Settings() {
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'stores', store.id), formData);
-      alert('설정이 저장되었습니다.');
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 3000);
     } catch (error) {
       console.error('Failed to save settings', error);
       alert('저장 중 오류가 발생했습니다.');
@@ -113,14 +115,22 @@ export function Settings() {
           <h1 className="text-3xl font-display font-bold text-slate-900">설정</h1>
           <p className="text-slate-500">매장 운영 및 결제 방식을 관리합니다.</p>
         </div>
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
-        >
-          <Save className="w-4 h-4" />
-          설정 저장하기
-        </button>
+        <div className="flex items-center gap-4">
+          {showSaveSuccess && (
+            <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 animate-in fade-in slide-in-from-right-4 duration-300">
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="text-sm font-bold">설정이 저장되었습니다!</span>
+            </div>
+          )}
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            설정 저장하기
+          </button>
+        </div>
       </div>
 
       {/* 1. 매장 기본 정보 */}

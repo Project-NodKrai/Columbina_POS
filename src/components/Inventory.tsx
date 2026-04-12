@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from 'firebase/firestore';
-import { Plus, Search, Edit2, Trash2, Package, Image as ImageIcon, Tag, X, History, ShoppingBag, Minus } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, Image as ImageIcon, Tag, X, History, ShoppingBag, Minus, Download, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
 
 export function Inventory() {
   const { store } = useAuth();
@@ -23,6 +24,7 @@ export function Inventory() {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [isSaleDeleteModalOpen, setIsSaleDeleteModalOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // Form state
@@ -171,6 +173,30 @@ export function Inventory() {
     setEditingSale({ ...editingSale, items: newItems, totalAmount: newTotal });
   };
 
+  const exportSalesToExcel = () => {
+    if (!store || sales.length === 0) return;
+    setIsExporting(true);
+    try {
+      const wb = XLSX.utils.book_new();
+      const exportData = sales.map(sale => ({
+        '주문 ID': sale.id,
+        '판매 일시': sale.timestamp?.toDate ? format(sale.timestamp.toDate(), 'yyyy-MM-dd HH:mm:ss') : '-',
+        '품목': sale.items?.map((i: any) => `${i.name}(${i.quantity})`).join(', '),
+        '총 결제 금액': sale.totalAmount,
+        '결제 수단': sale.paymentMethod === 'cash' ? '현금' : sale.paymentMethod === 'card' ? '카드' : '계좌이체'
+      }));
+      
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      XLSX.utils.book_append_sheet(wb, ws, "최근 판매 내역");
+      XLSX.writeFile(wb, `${store.name}_판매내역_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    } catch (error) {
+      console.error('Excel export failed', error);
+      alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(search.toLowerCase()) || 
     p.category.toLowerCase().includes(search.toLowerCase())
@@ -184,7 +210,7 @@ export function Inventory() {
           <p className="text-slate-500">상품 재고와 최근 판매 내역을 확인하세요.</p>
         </div>
         <div className="flex gap-3">
-          {activeSubTab === 'inventory' && (
+          {activeSubTab === 'inventory' ? (
             <>
               <button 
                 onClick={() => setIsCategoryModalOpen(true)}
@@ -201,6 +227,15 @@ export function Inventory() {
                 상품 등록
               </button>
             </>
+          ) : (
+            <button 
+              onClick={exportSalesToExcel}
+              disabled={isExporting || sales.length === 0}
+              className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-5 h-5" />
+              엑셀로 내보내기
+            </button>
           )}
         </div>
       </div>
@@ -491,18 +526,32 @@ export function Inventory() {
 
               <div className="pt-4 flex gap-3">
                 <button 
-                  type="button" 
-                  onClick={() => setIsSaleModalOpen(false)}
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                  type="button"
+                  onClick={() => {
+                    setIsSaleModalOpen(false);
+                    setSaleToDelete(editingSale.id);
+                    setIsSaleDeleteModalOpen(true);
+                  }}
+                  className="px-4 py-3 border border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 transition-all flex items-center gap-2"
                 >
-                  취소
+                  <Trash2 className="w-4 h-4" />
+                  결제 취소
                 </button>
-                <button 
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-                >
-                  수정 내용 저장
-                </button>
+                <div className="flex-1 flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsSaleModalOpen(false)}
+                    className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                  >
+                    수정 내용 저장
+                  </button>
+                </div>
               </div>
             </form>
           </div>
