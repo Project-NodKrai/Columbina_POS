@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { Plus, Search, Edit2, Trash2, Package, Image as ImageIcon, Tag, X } from 'lucide-react';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from 'firebase/firestore';
+import { Plus, Search, Edit2, Trash2, Package, Image as ImageIcon, Tag, X, History, ShoppingBag, Minus } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 export function Inventory() {
   const { store } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [sales, setSales] = useState<any[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'history'>('inventory');
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingSale, setEditingSale] = useState<any>(null);
+  const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+  const [isSaleDeleteModalOpen, setIsSaleDeleteModalOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // Form state
@@ -36,9 +44,16 @@ export function Inventory() {
     const unsubCategories = onSnapshot(collection(db, `stores/${store.id}/categories`), (snapshot) => {
       setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    const unsubSales = onSnapshot(
+      query(collection(db, `stores/${store.id}/sales`), orderBy('timestamp', 'desc')),
+      (snapshot) => {
+        setSales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }
+    );
     return () => {
       unsubProducts();
       unsubCategories();
+      unsubSales();
     };
   }, [store]);
 
@@ -103,6 +118,59 @@ export function Inventory() {
     setIsDeleteModalOpen(true);
   };
 
+  const handleUpdateSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!store || !editingSale) return;
+
+    try {
+      const saleRef = doc(db, `stores/${store.id}/sales`, editingSale.id);
+      await updateDoc(saleRef, {
+        items: editingSale.items,
+        totalAmount: editingSale.totalAmount,
+        paymentMethod: editingSale.paymentMethod
+      });
+      setIsSaleModalOpen(false);
+      setEditingSale(null);
+    } catch (error) {
+      console.error('Sale update failed', error);
+      alert('수정 권한이 없거나 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDeleteSale = async () => {
+    if (!store || !saleToDelete) return;
+    const id = saleToDelete;
+    setIsSaleDeleteModalOpen(false);
+    setSaleToDelete(null);
+
+    try {
+      await deleteDoc(doc(db, `stores/${store.id}/sales`, id));
+    } catch (error) {
+      console.error('Sale delete failed', error);
+      alert('삭제 권한이 없거나 오류가 발생했습니다.');
+    }
+  };
+
+  const updateSaleItemQuantity = (index: number, newQuantity: number) => {
+    if (!editingSale) return;
+    const newItems = [...editingSale.items];
+    newItems[index] = { ...newItems[index], quantity: Math.max(1, newQuantity) };
+    
+    // Recalculate total
+    const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    setEditingSale({ ...editingSale, items: newItems, totalAmount: newTotal });
+  };
+
+  const updateSaleItemPrice = (index: number, newPrice: number) => {
+    if (!editingSale) return;
+    const newItems = [...editingSale.items];
+    newItems[index] = { ...newItems[index], price: Math.max(0, newPrice) };
+    
+    // Recalculate total
+    const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    setEditingSale({ ...editingSale, items: newItems, totalAmount: newTotal });
+  };
+
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(search.toLowerCase()) || 
     p.category.toLowerCase().includes(search.toLowerCase())
@@ -112,119 +180,363 @@ export function Inventory() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-slate-900">재고 관리</h1>
-          <p className="text-slate-500">상품을 등록하고 재고를 추적하세요.</p>
+          <h1 className="text-3xl font-display font-bold text-slate-900">재고 및 판매 관리</h1>
+          <p className="text-slate-500">상품 재고와 최근 판매 내역을 확인하세요.</p>
         </div>
         <div className="flex gap-3">
-          <button 
-            onClick={() => setIsCategoryModalOpen(true)}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <Tag className="w-5 h-5" />
-            카테고리 관리
-          </button>
-          <button 
-            onClick={() => { setIsModalOpen(true); setEditingProduct(null); setFormData({ name: '', category: '', price: 0, cost: 0, stock: 0, minStock: 5, imageUrl: '' }); }}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-          >
-            <Plus className="w-5 h-5" />
-            상품 등록
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="상품명 또는 카테고리 검색..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <th className="px-6 py-4">상품 정보</th>
-                <th className="px-6 py-4">카테고리</th>
-                <th className="px-6 py-4">가격</th>
-                <th className="px-6 py-4">재고</th>
-                <th className="px-6 py-4 text-right">관리</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
-                        {product.imageUrl ? (
-                          <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon className="w-6 h-6 text-slate-300" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">{product.name}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
-                      {product.category || '전체'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(product.price)}</p>
-                    <p className="text-xs text-slate-400">원가: {formatCurrency(product.cost)}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "text-sm font-bold",
-                        product.stock <= product.minStock ? "text-red-500" : "text-slate-900"
-                      )}>
-                        {product.stock}
-                      </span>
-                      {product.stock <= product.minStock && (
-                        <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold uppercase">Low</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => { setEditingProduct(product); setFormData(product); setIsModalOpen(true); }}
-                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => confirmDelete(product.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredProducts.length === 0 && (
-            <div className="py-20 text-center">
-              <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-              <p className="text-slate-400">등록된 상품이 없습니다.</p>
-            </div>
+          {activeSubTab === 'inventory' && (
+            <>
+              <button 
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-all shadow-sm"
+              >
+                <Tag className="w-5 h-5" />
+                카테고리 관리
+              </button>
+              <button 
+                onClick={() => { setIsModalOpen(true); setEditingProduct(null); setFormData({ name: '', category: '', price: 0, cost: 0, stock: 0, minStock: 5, imageUrl: '' }); }}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+              >
+                <Plus className="w-5 h-5" />
+                상품 등록
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Sub-tabs */}
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => setActiveSubTab('inventory')}
+          className={cn(
+            "px-6 py-3 font-bold text-sm transition-all border-b-2",
+            activeSubTab === 'inventory' 
+              ? "border-indigo-600 text-indigo-600" 
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            재고 현황
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveSubTab('history')}
+          className={cn(
+            "px-6 py-3 font-bold text-sm transition-all border-b-2",
+            activeSubTab === 'history' 
+              ? "border-indigo-600 text-indigo-600" 
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4" />
+            최근 판매 내역
+          </div>
+        </button>
+      </div>
+
+      {activeSubTab === 'inventory' ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="상품명 또는 카테고리 검색..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-6 py-4">상품 정보</th>
+                  <th className="px-6 py-4">카테고리</th>
+                  <th className="px-6 py-4">가격</th>
+                  <th className="px-6 py-4">재고</th>
+                  <th className="px-6 py-4 text-right">관리</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProducts.map((product) => (
+                  <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-6 h-6 text-slate-300" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{product.name}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
+                        {product.category || '전체'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-semibold text-slate-900">{formatCurrency(product.price)}</p>
+                      <p className="text-xs text-slate-400">원가: {formatCurrency(product.cost)}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-sm font-bold",
+                          product.stock <= product.minStock ? "text-red-500" : "text-slate-900"
+                        )}>
+                          {product.stock}
+                        </span>
+                        {product.stock <= product.minStock && (
+                          <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded text-[10px] font-bold uppercase">Low</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => { setEditingProduct(product); setFormData(product); setIsModalOpen(true); }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => confirmDelete(product.id)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredProducts.length === 0 && (
+              <div className="py-20 text-center">
+                <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                <p className="text-slate-400">등록된 상품이 없습니다.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-6 py-4">판매 일시</th>
+                  <th className="px-6 py-4">판매 내역</th>
+                  <th className="px-6 py-4">결제 금액</th>
+                  <th className="px-6 py-4">결제 수단</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sales.map((sale) => (
+                  <tr 
+                    key={sale.id} 
+                    className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                    onClick={() => { setEditingSale(JSON.parse(JSON.stringify(sale))); setIsSaleModalOpen(true); }}
+                  >
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-medium text-slate-900">
+                        {sale.timestamp?.toDate ? format(sale.timestamp.toDate(), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}
+                      </p>
+                      <p className="text-[10px] font-mono text-slate-400 mt-1 uppercase tracking-tighter">ID: {sale.id.slice(0, 8)}...</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        {sale.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2 text-sm">
+                            <span className="font-bold text-slate-700">{item.name}</span>
+                            <span className="text-slate-400">x</span>
+                            <span className="font-bold text-indigo-600">{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-bold text-slate-900">{formatCurrency(sale.totalAmount)}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
+                          sale.paymentMethod === 'cash' ? "bg-emerald-50 text-emerald-600" :
+                          sale.paymentMethod === 'card' ? "bg-blue-50 text-blue-600" :
+                          "bg-amber-50 text-amber-600"
+                        )}>
+                          {sale.paymentMethod === 'cash' ? '현금' : 
+                           sale.paymentMethod === 'card' ? '카드' : '계좌이체'}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSaleToDelete(sale.id);
+                            setIsSaleDeleteModalOpen(true);
+                          }}
+                          className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {sales.length === 0 && (
+              <div className="py-20 text-center">
+                <ShoppingBag className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                <p className="text-slate-400">최근 판매 내역이 없습니다.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Sale Edit Modal */}
+      {isSaleModalOpen && editingSale && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">주문 상세 및 수정</h2>
+                <p className="text-xs text-slate-500 font-mono mt-1 uppercase">Order ID: {editingSale.id}</p>
+              </div>
+              <button onClick={() => setIsSaleModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateSale} className="p-6 space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">품목 리스트</h3>
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                  {editingSale.items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-900">{item.name}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-slate-500">단가:</span>
+                          <input 
+                            type="number"
+                            value={item.price}
+                            onChange={(e) => updateSaleItemPrice(idx, Number(e.target.value))}
+                            className="w-24 px-2 py-1 text-xs border border-slate-200 rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => updateSaleItemQuantity(idx, item.quantity - 1)}
+                          className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="w-8 text-center font-bold text-slate-900">{item.quantity}</span>
+                        <button 
+                          type="button"
+                          onClick={() => updateSaleItemQuantity(idx, item.quantity + 1)}
+                          className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="text-right min-w-[100px]">
+                        <p className="text-sm font-bold text-indigo-600">{formatCurrency(item.price * item.quantity)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">결제 수단</label>
+                  <div className="flex gap-2">
+                    {['cash', 'card', 'transfer'].map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => setEditingSale({ ...editingSale, paymentMethod: method })}
+                        className={cn(
+                          "flex-1 py-2 rounded-lg text-xs font-bold transition-all border",
+                          editingSale.paymentMethod === method 
+                            ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {method === 'cash' ? '현금' : method === 'card' ? '카드' : '이체'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">총 결제 금액</label>
+                  <p className="text-3xl font-display font-bold text-indigo-600">{formatCurrency(editingSale.totalAmount)}</p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsSaleModalOpen(false)}
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                >
+                  취소
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                >
+                  수정 내용 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sale Delete Confirmation Modal */}
+      {isSaleDeleteModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">결제 취소 (삭제)</h2>
+              <p className="text-slate-500 mb-6">정말 이 판매 내역을 삭제하시겠습니까?<br/>재고는 자동으로 복구되지 않으니 주의하세요.</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsSaleDeleteModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={handleDeleteSale}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                >
+                  삭제하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Product Modal */}
       {isModalOpen && (

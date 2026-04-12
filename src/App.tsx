@@ -165,13 +165,13 @@ function AppContent() {
               <StoreIcon className="w-12 h-12 text-white" />
             </div>
             <h1 className="text-4xl font-display font-bold tracking-tight text-slate-900">NodKrai POS</h1>
-            <p className="text-slate-500 text-lg">스마트한 매장 관리를 위한 올인원 POS 시스템</p>
+            <p className="text-slate-500 text-lg">스마트한 올인원 POS 시스템</p>
           </div>
           
           <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 space-y-6">
             <div className="space-y-2">
               <h2 className="text-xl font-bold">시작하기</h2>
-              <p className="text-sm text-slate-500">구글 계정으로 간편하게 로그인하고 매장을 관리하세요.</p>
+              <p className="text-sm text-slate-500">구글 계정으로 간편하게 로그인하고 사용해보세요.</p>
             </div>
             <button 
               onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
