@@ -73,11 +73,11 @@ export function SetupStore() {
                 className="flex-1 px-4 py-2 border border-slate-300 rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
               />
               <span className="bg-slate-100 border border-l-0 border-slate-300 px-3 py-2 rounded-r-lg text-slate-500 text-sm">
-                /store/{subdomain || '...'}
+                /kiosk/{subdomain || '...'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              키오스크 주소: https://pos.n-e.kr/#/store/{subdomain || 'my-store'}
+              키오스크 주소: https://pos.n-e.kr/#/kiosk/{subdomain || 'my-store'}
             </p>
           </div>
 

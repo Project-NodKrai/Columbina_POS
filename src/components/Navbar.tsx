@@ -4,6 +4,7 @@ import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { LogIn, LogOut, Store as StoreIcon, LayoutDashboard, ShoppingCart, Package, BarChart3, User, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Link } from 'react-router-dom';
 
 export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const { user, store } = useAuth();
@@ -30,12 +31,16 @@ export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActi
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+            <Link 
+              to={store ? `/admin/${store.subdomain}` : '/'}
+              onClick={() => setActiveTab('dashboard')}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <div className="bg-indigo-600 p-1.5 rounded-lg">
                 <StoreIcon className="w-6 h-6 text-white" />
               </div>
               <span className="font-display font-bold text-xl tracking-tight">NodKrai POS</span>
-            </div>
+            </Link>
 
             {user && store && (
               <div className="hidden md:flex items-center gap-1">
