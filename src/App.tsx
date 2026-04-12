@@ -13,9 +13,39 @@ import { POSSeller } from './components/POSSeller';
 import { POSKiosk } from './components/POSKiosk';
 import { Settings } from './components/Settings';
 import { LogIn, Store as StoreIcon } from 'lucide-react';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { cn } from './lib/utils';
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
+function KioskWrapper() {
+  const { subdomain } = useParams();
+  const [store, setStore] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function fetchStore() {
+      if (!subdomain) return;
+      const q = query(collection(db, 'stores'), where('subdomain', '==', subdomain.toLowerCase()));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setStore({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      }
+      setLoading(false);
+    }
+    fetchStore();
+  }, [subdomain]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">로딩 중...</div>;
+  if (!store) return <div className="min-h-screen flex items-center justify-center">매장을 찾을 수 없습니다.</div>;
+
+  return (
+    <div className="h-screen w-screen overflow-hidden">
+      <POSKiosk storeOverride={store} onExit={() => window.location.href = '/'} />
+    </div>
+  );
+}
 
 function AppContent() {
   const { user, store, loading } = useAuth();
@@ -97,7 +127,12 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <HashRouter>
+        <Routes>
+          <Route path="/store/:subdomain" element={<KioskWrapper />} />
+          <Route path="/*" element={<AppContent />} />
+        </Routes>
+      </HashRouter>
     </AuthProvider>
   );
 }

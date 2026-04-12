@@ -6,8 +6,9 @@ import { ShoppingCart, ArrowLeft, CheckCircle2, CreditCard, Plus, Minus, Banknot
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function POSKiosk({ onExit }: { onExit: () => void }) {
-  const { store } = useAuth();
+export function POSKiosk({ onExit, storeOverride }: { onExit: () => void, storeOverride?: any }) {
+  const { store: authStore } = useAuth();
+  const store = storeOverride || authStore;
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
