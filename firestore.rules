@@ -78,26 +78,26 @@ service cloud.firestore {
     // ===============================================================
 
     match /stores/{storeId} {
-      allow read: if isAuthenticated(); // Allow reading store info if logged in (for POS access)
+      allow read: if true; // Publicly readable for Kiosk mode
       allow create: if isAuthenticated() && isNewStoreOwner() && isValidStore(request.resource.data);
       allow update: if isStoreOwner(storeId) && isValidStore(request.resource.data);
       allow delete: if isStoreOwner(storeId);
 
       match /categories/{categoryId} {
-        allow read: if isAuthenticated();
+        allow read: if true; // Publicly readable for Kiosk mode
         allow create, update: if isStoreOwner(storeId) && isValidCategory(request.resource.data);
         allow delete: if isStoreOwner(storeId);
       }
 
       match /products/{productId} {
-        allow read: if isAuthenticated(); // Staff/Kiosk needs to read products
+        allow read: if true; // Publicly readable for Kiosk mode
         allow create, update: if isStoreOwner(storeId) && isValidProduct(request.resource.data);
         allow delete: if isStoreOwner(storeId);
       }
 
       match /sales/{saleId} {
-        allow read: if isAuthenticated(); // Staff/Kiosk needs to read sales for status updates
-        allow create: if isAuthenticated() && isValidSale(request.resource.data);
+        allow read: if true; // Kiosk needs to read sales for status updates
+        allow create: if true; // Kiosk needs to create sales
         allow update: if isAuthenticated() && (isStoreOwner(storeId) || (resource.data.status == 'pending' && (request.resource.data.status == 'completed' || request.resource.data.status == 'cancelled')));
         allow delete: if isStoreOwner(storeId);
       }

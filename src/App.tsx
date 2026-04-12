@@ -16,7 +16,7 @@ import { LogIn, Store as StoreIcon } from 'lucide-react';
 import { auth, db } from './firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { cn } from './lib/utils';
-import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
 function KioskWrapper() {
@@ -134,6 +134,16 @@ function AdminGuard() {
 function AppContent() {
   const { user, store, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!loading && user && store) {
+      // If we are on the root path and logged in with a store, redirect to admin
+      if (window.location.hash === '#/' || window.location.hash === '') {
+        navigate(`/admin/${store.subdomain}`);
+      }
+    }
+  }, [user, store, loading, navigate]);
 
   if (loading) {
     return (
