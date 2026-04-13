@@ -72,6 +72,7 @@ export function Dashboard() {
           '판매 일시': sale.timestamp?.toDate ? sale.timestamp.toDate().toLocaleString() : '-',
           '주문 방식': sale.type === 'seller' ? '판매자 POS' : '키오스크',
           '상품명': item.name,
+          '서비스 여부': item.isService ? 'Y' : 'N',
           '단가': item.price,
           '수량': item.quantity,
           '소계': item.price * item.quantity

@@ -372,7 +372,7 @@ export function POSKiosk({ onExit, storeOverride }: { onExit: () => void, storeO
                 )}
                 {product.stock <= (store?.lowStockThreshold || 5) && product.stock > 0 && (
                   <div className="absolute top-3 left-3 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
-                    재고 부족
+                    품절 임박
                   </div>
                 )}
                 {product.stock <= 0 && (

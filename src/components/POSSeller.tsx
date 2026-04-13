@@ -45,45 +45,91 @@ export function POSSeller() {
     };
   }, [store]);
 
+  const [longPressTimer, setLongPressTimer] = useState<any>(null);
+
+  const startLongPress = (product: any) => {
+    const timer = setTimeout(() => {
+      addToCart(product, true);
+      setLongPressTimer(null);
+    }, 600);
+    setLongPressTimer(timer);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
   const categoryOptions = ['전체', ...categories.map(c => c.name)];
 
-  const addToCart = (product: any) => {
+  const addToCart = (product: any, isService: boolean = false) => {
     if (product.stock <= 0) return;
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        if (existing.quantity >= product.stock) {
-          alert('재고가 부족합니다.');
-          return prev;
-        }
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      const cartItemId = isService ? `${product.id}-service` : product.id;
+      const existing = prev.find(item => item.cartItemId === cartItemId);
+      
+      // Calculate total quantity of this product already in cart (regular + service)
+      const totalInCart = prev
+        .filter(item => item.id === product.id)
+        .reduce((acc, item) => acc + item.quantity, 0);
+
+      if (totalInCart >= product.stock) {
+        alert('재고가 부족합니다.');
+        return prev;
       }
-      return [...prev, { ...product, quantity: 1 }];
+
+      if (existing) {
+        return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...prev, { 
+        ...product, 
+        cartItemId, 
+        isService, 
+        price: isService ? 0 : product.price,
+        quantity: 1 
+      }];
     });
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
+  const removeFromCart = (cartItemId: string) => {
+    setCart(prev => prev.filter(item => item.cartItemId !== cartItemId));
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
-    const product = products.find(p => p.id === productId);
+  const updateQuantity = (cartItemId: string, delta: number) => {
+    const itemInCart = cart.find(i => i.cartItemId === cartItemId);
+    if (!itemInCart) return;
+
+    const product = products.find(p => p.id === itemInCart.id);
     if (!product) return;
 
-    setCart(prev => prev.map(item => {
-      if (item.id === productId) {
-        const newQty = item.quantity + delta;
-        if (newQty > product.stock) {
-          alert('재고가 부족합니다.');
-          return item;
-        }
-        return { ...item, quantity: Math.max(1, newQty) };
+    setCart(prev => {
+      const newQty = itemInCart.quantity + delta;
+      if (newQty < 1) return prev;
+
+      // Check total stock for this product across all cart items
+      const otherItemsQty = prev
+        .filter(item => item.id === product.id && item.cartItemId !== cartItemId)
+        .reduce((acc, item) => acc + item.quantity, 0);
+
+      if (otherItemsQty + newQty > product.stock) {
+        alert('재고가 부족합니다.');
+        return prev;
       }
-      return item;
-    }));
+
+      return prev.map(item => item.cartItemId === cartItemId ? { ...item, quantity: newQty } : item);
+    });
   };
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const discountTotal = cart.reduce((acc, item) => {
+    if (item.isService) {
+      const originalProduct = products.find(p => p.id === item.id);
+      return acc + ((originalProduct?.price || 0) * item.quantity);
+    }
+    return acc;
+  }, 0);
 
   const handleCheckout = async (method: 'cash' | 'card' | 'transfer') => {
     if (!store || cart.length === 0 || isProcessing) return;
@@ -93,6 +139,7 @@ export function POSSeller() {
         id: 'DIRECT',
         items: cart,
         totalAmount: total,
+        discountAmount: discountTotal,
         paymentMethod: 'cash'
       });
       setIsDirectCheckout(true);
@@ -104,25 +151,37 @@ export function POSSeller() {
     setIsProcessing(true);
     try {
       // Final Stock Check
+      const stockCheckMap: Record<string, number> = {};
       for (const item of cart) {
-        const p = products.find(prod => prod.id === item.id);
-        if (p && p.stock < item.quantity) {
-          alert(`${item.name}의 재고가 부족합니다. (현재 재고: ${p.stock})`);
+        stockCheckMap[item.id] = (stockCheckMap[item.id] || 0) + item.quantity;
+      }
+      
+      for (const [productId, totalQty] of Object.entries(stockCheckMap)) {
+        const p = products.find(prod => prod.id === productId);
+        if (p && p.stock < totalQty) {
+          alert(`${p.name}의 재고가 부족합니다. (현재 재고: ${p.stock})`);
           setIsProcessing(false);
           return;
         }
       }
 
-      // 1. Record Sale
-      await addDoc(collection(db, `stores/${store.id}/sales`), {
-        storeId: store.id,
-        items: cart.map(item => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
-        totalAmount: total,
-        paymentMethod: method,
-        status: 'completed',
-        timestamp: serverTimestamp(),
-        type: 'seller'
-      });
+        // 1. Record Sale
+        await addDoc(collection(db, `stores/${store.id}/sales`), {
+          storeId: store.id,
+          items: cart.map(item => ({ 
+            id: item.id, 
+            name: item.isService ? `[서비스] ${item.name}` : item.name, 
+            price: item.price, 
+            quantity: item.quantity,
+            isService: item.isService 
+          })),
+          totalAmount: total,
+          discountAmount: discountTotal,
+          paymentMethod: method,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          type: 'seller'
+        });
 
       // 2. Update Inventory
       for (const item of cart) {
@@ -152,10 +211,15 @@ export function POSSeller() {
     try {
       if (isDirectCheckout) {
         // Final Stock Check
+        const stockCheckMap: Record<string, number> = {};
         for (const item of cart) {
-          const p = products.find(prod => prod.id === item.id);
-          if (p && p.stock < item.quantity) {
-            alert(`${item.name}의 재고가 부족합니다. (현재 재고: ${p.stock})`);
+          stockCheckMap[item.id] = (stockCheckMap[item.id] || 0) + item.quantity;
+        }
+        
+        for (const [productId, totalQty] of Object.entries(stockCheckMap)) {
+          const p = products.find(prod => prod.id === productId);
+          if (p && p.stock < totalQty) {
+            alert(`${p.name}의 재고가 부족합니다. (현재 재고: ${p.stock})`);
             setIsProcessing(false);
             return;
           }
@@ -164,8 +228,15 @@ export function POSSeller() {
         // Direct POS Checkout
         await addDoc(collection(db, `stores/${store.id}/sales`), {
           storeId: store.id,
-          items: cart.map(item => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+          items: cart.map(item => ({ 
+            id: item.id, 
+            name: item.isService ? `[서비스] ${item.name}` : item.name, 
+            price: item.price, 
+            quantity: item.quantity,
+            isService: item.isService 
+          })),
           totalAmount: total,
+          discountAmount: discountTotal,
           paymentMethod: 'cash',
           status: 'completed',
           receivedAmount: received,
@@ -310,9 +381,18 @@ export function POSSeller() {
                   <button
                     key={product.id}
                     onClick={() => addToCart(product)}
+                    onMouseDown={() => startLongPress(product)}
+                    onMouseUp={cancelLongPress}
+                    onMouseLeave={cancelLongPress}
+                    onTouchStart={() => startLongPress(product)}
+                    onTouchEnd={cancelLongPress}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      addToCart(product, true);
+                    }}
                     disabled={product.stock <= 0}
                     className={cn(
-                      "flex flex-col text-left bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-md transition-all group relative overflow-hidden",
+                      "flex flex-col text-left bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:shadow-md transition-all group relative overflow-hidden active:scale-95",
                       product.stock <= 0 && "opacity-60 grayscale cursor-not-allowed"
                     )}
                   >
@@ -410,23 +490,28 @@ export function POSSeller() {
           <AnimatePresence initial={false}>
             {cart.map(item => (
               <motion.div 
-                key={item.id}
+                key={item.cartItemId}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 className="flex items-center justify-between group"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    {item.isService && (
+                      <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1 rounded">서비스</span>
+                    )}
+                    <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
+                  </div>
                   <p className="text-xs text-slate-500">{formatCurrency(item.price)}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                    <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-white rounded transition-colors"><Minus className="w-3 h-3" /></button>
+                    <button onClick={() => updateQuantity(item.cartItemId, -1)} className="p-1 hover:bg-white rounded transition-colors"><Minus className="w-3 h-3" /></button>
                     <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-white rounded transition-colors"><Plus className="w-3 h-3" /></button>
+                    <button onClick={() => updateQuantity(item.cartItemId, 1)} className="p-1 hover:bg-white rounded transition-colors"><Plus className="w-3 h-3" /></button>
                   </div>
-                  <button onClick={() => removeFromCart(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                  <button onClick={() => removeFromCart(item.cartItemId)} className="text-slate-300 hover:text-red-500 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

@@ -105,6 +105,7 @@ export function Settings() {
           '판매 일시': sale.timestamp?.toDate ? sale.timestamp.toDate().toLocaleString() : '-',
           '주문 방식': sale.type === 'seller' ? '판매자 POS' : '키오스크',
           '상품명': item.name,
+          '서비스 여부': item.isService ? 'Y' : 'N',
           '단가': item.price,
           '수량': item.quantity,
           '소계': item.price * item.quantity
@@ -310,7 +311,7 @@ export function Settings() {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-bold text-slate-900">낮은 재고 알림 임계값</h4>
-                <p className="text-sm text-slate-500">재고가 설정값 미만일 때 "재고 부족" 표시를 띄웁니다.</p>
+                <p className="text-sm text-slate-500">재고가 설정값 미만일 때 키오스크에 "품절 임박" 표시를 띄웁니다.</p>
               </div>
               <div className="flex items-center gap-3">
                 <input 
