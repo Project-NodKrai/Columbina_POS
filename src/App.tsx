@@ -133,17 +133,24 @@ function AdminGuard() {
 
 function AppContent() {
   const { user, store, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
   const location = useLocation();
+  const { subdomain } = useParams();
 
   React.useEffect(() => {
     if (!loading && user && (location.pathname === '/' || location.pathname === '')) {
       if (store) {
-        navigate(`/admin/${store.subdomain}`, { replace: true });
+        navigate(`/admin/${store.subdomain}/dashboard`, { replace: true });
       }
     }
   }, [user, store, loading, navigate, location]);
+
+  // If we're at /admin/:subdomain without a sub-path, redirect to dashboard
+  React.useEffect(() => {
+    if (subdomain && (location.pathname === `/admin/${subdomain}` || location.pathname === `/admin/${subdomain}/`)) {
+      navigate(`/admin/${subdomain}/dashboard`, { replace: true });
+    }
+  }, [subdomain, location.pathname, navigate]);
 
   if (loading) {
     return (
@@ -193,26 +200,28 @@ function AppContent() {
   if (!store) {
     return (
       <>
-        <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Navbar />
         <SetupStore />
       </>
     );
   }
 
+  const isKioskMode = location.pathname.includes('/kiosk/');
+
   return (
     <div className="min-h-screen bg-slate-50">
-      {activeTab !== 'pos-kiosk' && (
-        <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-      )}
+      {!isKioskMode && <Navbar />}
       <main className={cn(
         "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8",
-        activeTab === 'pos-kiosk' && "max-w-none px-0 py-0 h-screen"
+        isKioskMode && "max-w-none px-0 py-0 h-screen"
       )}>
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'inventory' && <Inventory />}
-        {activeTab === 'pos-seller' && <POSSeller />}
-        {activeTab === 'pos-kiosk' && <POSKiosk onExit={() => setActiveTab('dashboard')} />}
-        {activeTab === 'settings' && <Settings />}
+        <Routes>
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="product" element={<Inventory />} />
+          <Route path="POS" element={<POSSeller />} />
+          <Route path="setting" element={<Settings />} />
+          <Route path="/" element={<Navigate to="dashboard" replace />} />
+        </Routes>
       </main>
     </div>
   );
@@ -224,7 +233,7 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route path="/kiosk/:subdomain" element={<KioskWrapper />} />
-          <Route path="/admin/:subdomain" element={<AdminGuard />} />
+          <Route path="/admin/:subdomain/*" element={<AdminGuard />} />
           <Route path="/" element={<AppContent />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

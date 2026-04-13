@@ -4,10 +4,11 @@ import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { LogIn, LogOut, Store as StoreIcon, LayoutDashboard, ShoppingCart, Package, BarChart3, User, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
-export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
+export function Navbar() {
   const { user, store } = useAuth();
+  const location = useLocation();
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -26,14 +27,17 @@ export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActi
     }
   };
 
+  const isActive = (path: string) => {
+    return location.pathname.toLowerCase().endsWith(path.toLowerCase());
+  };
+
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center gap-8">
             <Link 
-              to={store ? `/admin/${store.subdomain}` : '/'}
-              onClick={() => setActiveTab('dashboard')}
+              to={store ? `/admin/${store.subdomain}/dashboard` : '/'}
               className="flex items-center gap-2 cursor-pointer"
             >
               <div className="bg-indigo-600 p-1.5 rounded-lg">
@@ -45,32 +49,32 @@ export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActi
             {user && store && (
               <div className="hidden md:flex items-center gap-1">
                 <NavButton 
-                  active={activeTab === 'dashboard'} 
-                  onClick={() => setActiveTab('dashboard')}
+                  to={`/admin/${store.subdomain}/dashboard`}
+                  active={isActive('/dashboard')} 
                   icon={<LayoutDashboard className="w-4 h-4" />}
                   label="대시보드"
                 />
                 <NavButton 
-                  active={activeTab === 'pos-seller'} 
-                  onClick={() => setActiveTab('pos-seller')}
+                  to={`/admin/${store.subdomain}/POS`}
+                  active={isActive('/POS')} 
                   icon={<ShoppingCart className="w-4 h-4" />}
                   label="판매자 POS"
                 />
                 <NavButton 
-                  active={activeTab === 'pos-kiosk'} 
-                  onClick={() => setActiveTab('pos-kiosk')}
+                  to={`/kiosk/${store.subdomain}`}
+                  active={false} 
                   icon={<User className="w-4 h-4" />}
                   label="키오스크"
                 />
                 <NavButton 
-                  active={activeTab === 'inventory'} 
-                  onClick={() => setActiveTab('inventory')}
+                  to={`/admin/${store.subdomain}/product`}
+                  active={isActive('/product')} 
                   icon={<Package className="w-4 h-4" />}
                   label="재고관리"
                 />
                 <NavButton 
-                  active={activeTab === 'settings'} 
-                  onClick={() => setActiveTab('settings')}
+                  to={`/admin/${store.subdomain}/setting`}
+                  active={isActive('/setting')} 
                   icon={<SettingsIcon className="w-4 h-4" />}
                   label="설정"
                 />
@@ -114,10 +118,10 @@ export function Navbar({ activeTab, setActiveTab }: { activeTab: string, setActi
   );
 }
 
-function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+function NavButton({ active, to, icon, label }: { active: boolean, to: string, icon: React.ReactNode, label: string }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={to}
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all",
         active 
@@ -127,6 +131,6 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
     >
       {icon}
       {label}
-    </button>
+    </Link>
   );
 }
