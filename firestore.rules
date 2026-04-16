@@ -78,6 +78,7 @@ service cloud.firestore {
     function isValidBusinessSession(data) {
       return data.keys().hasAll(['storeId', 'startTime', 'status']) &&
              data.storeId is string &&
+             (!('ownerId' in data) || data.ownerId is string) &&
              data.startTime is timestamp &&
              data.status in ['open', 'closed'] &&
              (!('endTime' in data) || data.endTime is timestamp) &&
@@ -116,7 +117,7 @@ service cloud.firestore {
       match /businessSessions/{sessionId} {
         allow read: if isAuthenticated();
         allow create, update: if isStoreOwner(storeId) && isValidBusinessSession(request.resource.data);
-        allow delete: if isStoreOwner(storeId);
+        allow delete: if isStoreOwner(storeId) || (isAuthenticated() && resource.data.ownerId == request.auth.uid);
       }
     }
   }
