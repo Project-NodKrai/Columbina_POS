@@ -190,10 +190,10 @@ export function Settings() {
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">키오스크 접속 주소 (변경 불가)</label>
               <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 font-mono text-sm flex items-center justify-between">
-                <span>https://pos.n-e.kr/#/kiosk/{store?.subdomain}</span>
+                <span>{window.location.origin}/#/kiosk/{store?.subdomain}</span>
                 <button 
                   onClick={() => {
-                    navigator.clipboard.writeText(`https://pos.n-e.kr/#/kiosk/${store?.subdomain}`);
+                    navigator.clipboard.writeText(`${window.location.origin}/#/kiosk/${store?.subdomain}`);
                     alert('주소가 복사되었습니다.');
                   }}
                   className="text-indigo-600 hover:text-indigo-700 font-bold text-xs"
